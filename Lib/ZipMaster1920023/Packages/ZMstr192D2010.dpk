@@ -1,0 +1,85 @@
+package ZMstr192D2010;
+{$R *.res}
+{$R 'Zipmaster.dcr'}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN OFF}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA OFF}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS OFF}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS OFF}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS OFF}
+{$RANGECHECKS ON}
+{$REFERENCEINFO OFF}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST ON}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $6200000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'ZipMaster 1.9.2 '}
+{$IMPLICITBUILD ON}
+
+requires
+  vcl,
+  vclx;
+
+contains
+  ZMArgSplit in '..\ZMArgSplit.pas',
+  ZMBaseOpr in '..\ZMBaseOpr.pas',
+  ZMBody in '..\ZMBody.pas',
+  ZMCoDec in '..\ZMCoDec.pas',
+  ZMCommand in '..\ZMCommand.pas',
+  ZMCompat in '..\ZMCompat.pas',
+  ZMCore in '..\ZMCore.pas',
+  ZMCRC in '..\ZMCRC.pas',
+  ZMCtx in '..\ZMCtx.pas',
+  ZMDelZip in '..\ZMDelZip.pas',
+  ZMDlg in '..\ZMDlg.pas',
+  ZMDllLoad in '..\ZMDllLoad.pas',
+  ZMDrv in '..\ZMDrv.pas',
+  ZMEngine in '..\ZMEngine.pas',
+  ZMEntryReader in '..\ZMEntryReader.pas',
+  ZMFileOpr in '..\ZMFileOpr.pas',
+  ZMFStream in '..\ZMFStream.pas',
+  ZMHandler in '..\ZMHandler.pas',
+  ZMLister in '..\ZMLister.pas',
+  ZMMatch in '..\ZMMatch.pas',
+  ZMMFStream in '..\ZMMFStream.pas',
+  ZMMisc in '..\ZMMisc.pas',
+  ZMMsg in '..\ZMMsg.pas',
+  ZMOprCore in '..\ZMOprCore.pas',
+  ZMOprDeflate in '..\ZMOprDeflate.pas',
+  ZMOprDel in '..\ZMOprDel.pas',
+  ZMOprDll in '..\ZMOprDll.pas',
+  ZMOprFile in '..\ZMOprFile.pas',
+  ZMOprMerge in '..\ZMOprMerge.pas',
+  ZMOprMod in '..\ZMOprMod.pas',
+  ZMOprMsgStr in '..\ZMOprMsgStr.pas',
+  ZMOprUnzip in '..\ZMOprUnzip.pas',
+  ZMReg in '..\ZMReg.pas',
+  ZMSFXInt in '..\ZMSFXInt.pas',
+  ZMStructs in '..\ZMStructs.pas',
+  ZMUnzipOpr in '..\ZMUnzipOpr.pas',
+  ZMUTF8 in '..\ZMUTF8.pas',
+  ZMUtils in '..\ZMUtils.pas',
+  ZMWinFuncs in '..\ZMWinFuncs.pas',
+  ZMXcpt in '..\ZMXcpt.pas',
+  ZMZipBase in '..\ZMZipBase.pas',
+  ZMZipDirectory in '..\ZMZipDirectory.pas',
+  ZMZipEOC in '..\ZMZipEOC.pas',
+  ZMZipMulti in '..\ZMZipMulti.pas',
+  ZMZipReader in '..\ZMZipReader.pas',
+  ZMZipWriter in '..\ZMZipWriter.pas',
+  ZMZLibExApi in '..\ZMZLibExApi.pas',
+  ZipMstr in '..\ZipMstr.pas';
+
+end.

@@ -1,0 +1,35 @@
+# Delphi build outputs
+*.dcu
+*.exe
+*.dll
+*.bpl
+*.dcp
+*.map
+*.tds
+*.rsm
+*.drc
+*.identcache
+*.stat
+*.local
+
+# Delphi IDE and temporary files
+*.~*
+*.tmp
+*.log
+*.tvsconfig
+*.otares
+__history/
+__recovery/
+
+# Environment-specific configuration
+*.ini
+
+# Build output folders
+buildcheck/
+Win32/
+Win64/
+__astcache/
+
+# Git / OS noise
+.DS_Store
+Thumbs.db

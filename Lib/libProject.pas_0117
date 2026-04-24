@@ -1,0 +1,1432 @@
+////////////////////////////////////////////////////////////////////////////////
+// Project에 관련된 기초 Library
+//
+// 작성자 : 김승주
+// 작성일 :
+// 수정자 : 김승주
+// 수정일 : 2003-01-28
+// 수정자 : 강성범
+// 수정일 : 2012-01-05  xe 작업하면서...
+////////////////////////////////////////////////////////////////////////////////
+unit libProject;
+
+interface
+
+uses
+  Windows, SysUtils, Classes, Forms, DB, DBTables, DBClient, Provider, AdoDB, uCDSUtil,
+  Uni, UniProvider, SQLServerUniProvider, MySQLUniProvider, OracleUniProvider,
+  ComCtrls, DebugLib, DBGrids, Dialogs;
+
+type
+////////////////////////////////////////////////////////////////////////////////
+// 사용자 정보
+////////////////////////////////////////////////////////////////////////////////
+  TCustomUser = class(TObject)
+  private
+    FID: String;
+    FName: String;
+
+    procedure SetID(Value: String);
+    procedure SetName(Value: String);
+  public
+    property ID: String read FID write SetID;
+    property Name: String read FName write SetName;
+  end;
+
+  TUser = class(TCustomUser)
+  private
+    FGrade: String;
+
+    procedure SetGrade(Value: String);
+  protected
+    constructor Create;
+    destructor Destroy; override;
+  public
+    class function CreateInstance: TUser;
+
+// property
+    property Grade: String read FGrade write SetGrade;
+  end;
+
+////////////////////////////////////////////////////////////////////////////////
+// DB관련 함수
+////////////////////////////////////////////////////////////////////////////////
+  TCustomPDB = class(TObject)
+  protected
+    FDatabase: TDatabase;
+    FQuery: TQuery;
+    FUseQuery: TQuery;
+    FCdsQuery: TQuery;
+    FStoredProc: TStoredProc;
+    FeSQL: TStringList;
+    procedure SetDatabase(Value: TDatabase);
+  public
+    constructor Create; overload;
+    constructor Create(ADatabase: TDatabase); overload;
+    destructor Destroy; override;
+
+    procedure StartTransaction;
+    procedure Commit;
+    procedure Rollback;
+
+    property Database: TDatabase read FDatabase write SetDatabase;
+    property Query: TQuery read FQuery;
+    property UseQuery: TQuery read FUseQuery;
+    property CdsQuery: TQuery read FCdsQuery;
+    property StoredProc: TStoredProc read FStoredProc;
+    property eSQL: TStringList read FeSQL;
+  end;
+
+////////////////////////////////////////////////////////////////////////////////
+// DB관련 함수
+////////////////////////////////////////////////////////////////////////////////
+  TCustomPDB_Ado = class(TObject)
+  private
+    FDatabase: TADOConnection;
+    FQuery: TAdoQuery;
+    FUseQuery: TAdoQuery;
+    FCdsQuery: TAdoQuery;
+    FExecQry: TAdoQuery;
+    FStoredProc: TADOStoredProc;
+
+    FeSQL: TStringList;
+
+    function GetQuery: TADOQuery;
+    function GetUseQuery: TADOQuery;
+
+    procedure Clear_Index(SCDataSet: TClientDataSet);
+    procedure ADOQueryToCDS(Query: TADOQuery; CDS: TClientDataSet);
+    procedure ADOQueryToSumCDS(Query: TADOQuery; CDS: TClientDataSet; DisplayFields, GroupFields, SumFields, Expressions: String; WithAvg: Boolean = False;
+      SumDisplay: String = ''; AvgDisplay: String = ''; CallBack: TNotifyEvent = nil);
+    procedure DBGridCheckBoxClick(Sender: TObject; Column: TColumn);
+  protected
+    procedure SetDatabase(Value: TADOConnection);
+  public
+    constructor Create; overload;
+    constructor Create(ADatabase: TADOConnection); overload;
+    destructor Destroy; override;
+
+    procedure StartTransaction;
+    procedure Commit;
+    procedure Rollback;
+
+    function OpenQuery(Query: TADOQuery; SQLStr: String): Integer;
+    function OpenCDS(CDS: TClientDataSet; SQLStr: String; Flag: Boolean=True): Integer;
+    function OpenSumCDS(DBGrid: TDBGrid; CDS: TClientDataSet; SQLStr: String; DisplayFields, GroupFields, SumFields, Expressions: String; CallBack: TNotifyEvent = nil;
+                        WithAvg: Boolean = False; SumDisplay: String = '';  AvgDisplay: String = ''; Flag: Boolean = TRUE): Integer;
+    function OpenDS(DS: TDataSource; SQLStr: String; Flag: Boolean = TRUE): Integer;
+    function ExecQuery(SQLStr: String): Integer;
+
+    function GetMaxValue(SQLStr: String): Integer;
+    function RecordExists(SQLStr: String): Boolean;
+    function RecordCount(SQLStr: String): Longint;
+    function GetValue(SQLStr: String): String;
+
+  published
+    property Database: TADOConnection read FDatabase write SetDatabase;
+    property Query: TAdoQuery read GetQuery;
+    property UseQuery: TAdoQuery read GetUseQuery;
+    property CdsQuery: TAdoQuery read FCdsQuery;
+    property ExecQry: TAdoQuery read FExecQry;
+    property StoredProc: TADOStoredProc read FStoredProc;
+    property eSQL: TStringList read FeSQL;
+  end;
+
+////////////////////////////////////////////////////////////////////////////////
+// DB관련 함수
+////////////////////////////////////////////////////////////////////////////////
+  TCustomPDB_Uni = class(TObject)
+  private
+    FDatabase: TUniConnection;
+    FQuery: TUniQuery;
+    FUseQuery: TUniQuery;
+    FCdsQuery: TUniQuery;
+    FExecQry: TUniQuery;
+    FStoredProc: TUniStoredProc;
+
+    FeSQL: TStringList;
+
+    function GetQuery: TUniQuery;
+    function GetUseQuery: TUniQuery;
+
+    procedure Clear_Index(SCDataSet: TClientDataSet);
+    procedure UniQueryToCDS(Query: TUniQuery; CDS: TClientDataSet);
+    procedure UniQueryToSumCDS(Query: TUniQuery; CDS: TClientDataSet; DisplayFields, GroupFields, SumFields, Expressions: String; WithAvg: Boolean = False;
+      SumDisplay: String = ''; AvgDisplay: String = ''; CallBack: TNotifyEvent = nil);
+    procedure DBGridCheckBoxClick(Sender: TObject; Column: TColumn);
+  protected
+    procedure SetDatabase(Value: TUniConnection);
+  public
+    constructor Create; overload;
+    constructor Create(ADatabase: TUniConnection); overload;
+    destructor Destroy; override;
+
+    procedure StartTransaction;
+    procedure Commit;
+    procedure Rollback;
+
+    function OpenQuery(Query: TUniQuery; SQLStr: String): Integer;
+    function OpenCDS(CDS: TClientDataSet; SQLStr: String; Flag: Boolean=True): Integer;
+    function OpenSumCDS(DBGrid: TDBGrid; CDS: TClientDataSet; SQLStr: String; DisplayFields, GroupFields, SumFields, Expressions: String; CallBack: TNotifyEvent = nil;
+                        WithAvg: Boolean = False; SumDisplay: String = '';  AvgDisplay: String = ''; Flag: Boolean = TRUE): Integer;
+    function OpenDS(DS: TDataSource; SQLStr: String; Flag: Boolean = TRUE): Integer;
+    function ExecQuery(SQLStr: String): Integer;
+
+    function GetMaxValue(SQLStr: String): Integer;
+    function RecordExists(SQLStr: String): Boolean;
+    function RecordCount(SQLStr: String): Longint;
+    function GetValue(SQLStr: String): String;
+
+  published
+    property Database: TUniConnection read FDatabase write SetDatabase;
+    property Query: TUniQuery read GetQuery;
+    property UseQuery: TUniQuery read GetUseQuery;
+    property CdsQuery: TUniQuery read FCdsQuery;
+    property ExecQry: TUniQuery read FExecQry;
+    property StoredProc: TUniStoredProc read FStoredProc;
+    property eSQL: TStringList read FeSQL;
+  end;
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Project관련 함수
+////////////////////////////////////////////////////////////////////////////////
+  TCustomProject = class(TObject)
+  private
+    FUser: TUser;
+
+    FRootPath: String;
+    FDBPath: String;
+    FImagePath: String;
+    FMSG_CAPTION: String;
+
+    FLogFileName: String;
+    FRealFileName: String;        // 확장자를 제외한 파일 이름
+    FIniFileName: String;
+
+    function GetUserID: String;
+    function GetUserName: String;
+    function GetUserGrade: String;
+    procedure SetUserID(Value: String);
+    procedure SetUserName(Value: String);
+    procedure SetUserGrade(Value: String);
+
+    procedure SetMsgCaption(Value: String);
+  public
+    constructor Create;
+    destructor Destroy; override;
+
+    function GetConfig(Section, Ident: String; DefaultValue: String): String; overload;
+    function GetConfig(Section, Ident: String; DefaultValue: Integer): Integer; overload;
+    function SetConfig(Section, Ident: String; Value: String): Boolean; overload;
+    function SetConfig(Section, Ident: String; Value: Integer): Boolean; overload;
+
+    function MsgBox(const Text, Caption: PChar; Flags: Longint): Integer; overload;
+    function MsgBox(const Text: PChar; Flags: Longint): Integer; overload;
+    procedure MsgBox(const Msg, Caption: String; DlgType: TMsgDlgType); overload;
+    function MsgDlg(const Msg, Caption: String; DlgType: TMsgDlgType): Integer; overload;
+    function MsgDisplay(Msg: String; Flag: Integer): Integer;
+    procedure MsgProcess(const Msg: String);
+    function MsgConfirm(const Msg: String): Boolean;
+    procedure MsgError(const Msg: String);
+    procedure MsgWarning(const Msg: String);
+    procedure MsgSaveError;
+    procedure MsgDeleteError;
+    function ConfirmSave: Boolean;
+    function ConfirmDelete(AValue: Boolean = False):Boolean;
+    function ConfirmUpdate(AValue: Boolean = False):Boolean;
+    function ConfirmClose(AValue: Boolean = False): Boolean;
+    procedure MsgNewData;
+
+    // DBGrid Title을 클릭했을때 소트한다.
+    procedure TitleClick_Sort(SCDataSet: TClientDataSet; SDBGrid: TDBGrid; Column: TColumn; var Asc: Boolean); overload;
+    procedure TitleClick_Sort(SCDataSet : TClientDataSet; SDBGrid: TDBGrid; Column: TColumn; Field_Sort: String; var Asc: Boolean); overload;
+
+    procedure LogStart(AFileName: String);
+    procedure LogStop;
+    function Log(Msg: String; AFileName: String=''): Boolean;
+
+    procedure ShowOnTaskBar(AHandle: THandle; Value: Boolean);
+  published
+    property RootPath: String read FRootPath;
+    property DBPath: String read FDBPath;
+    property ImagePath: String read FImagePath;
+    property RealFileName: String read FRealFileName;
+    property IniFileName: String read FIniFileName;
+    property MSG_CAPTION: String read FMSG_CAPTION write FMSG_CAPTION;
+
+    property User: TUser read FUser write FUser;
+    property USER_NO: String read GetUserID write SetUserID;
+    property USER_NM: String read GetUserName write SetUserName;
+    property RIGHT: String read GetUserGrade write SetUserGrade;
+  end;
+
+var
+  User: TUser;
+
+implementation
+
+const
+  USER_GROUP_FIELD_ = uCDSUtil.USER_GROUP_FIELD;
+  USER_DEPTH_FIELD = uCDSUtil.USER_DEPTH_FIELD;
+  USER_TYPE_FIELD  = uCDSUtil.USER_TYPE_FIELD;
+  USER_COUNT_FIELD = uCDSUtil.USER_COUNT_FIELD;
+  TOTAL_DEPTH      = uCDSUtil.TOTAL_DEPTH;
+
+  { TCustomUser }
+
+procedure TCustomUser.SetID(Value: String);
+begin
+  FID := Value;
+end;
+
+procedure TCustomUser.SetName(Value: String);
+begin
+  FName := Value;
+end;
+
+{ TUser }
+
+constructor TUser.Create;
+begin
+  inherited;
+end;
+
+destructor TUser.Destroy;
+begin
+  inherited;
+end;
+
+class function TUser.CreateInstance: TUser;
+begin
+  if not Assigned(User) then
+    User := TUser.Create;
+
+  Result := User;
+end;
+
+procedure TUser.SetGrade(Value: String);
+begin
+  if Value <> FGrade then
+    FGrade := Value;
+end;
+
+{ TCustomPDB }
+
+constructor TCustomPDB.Create;
+begin
+  inherited Create;
+
+  FQuery := TQuery.Create(nil);
+  FUseQuery := TQuery.Create(nil);
+  FCdsQuery := TQuery.Create(nil);
+  FStoredProc := TStoredProc.Create(nil);
+
+  FeSQL := TStringList.Create;
+end;
+
+constructor TCustomPDB.Create(ADatabase: TDatabase);
+begin
+  inherited Create;
+
+  FDatabase := ADatabase;
+
+  FQuery := TQuery.Create(Application);
+  FUseQuery := TQuery.Create(Application);
+  FCdsQuery := TQuery.Create(Application);
+  FStoredProc := TStoredProc.Create(Application);
+  if Assigned(FDatabase) then
+  begin
+    FQuery.DatabaseName := FDatabase.DatabaseName;
+    FUseQuery.DatabaseName := FDatabase.DatabaseName;
+    FCdsQuery.DatabaseName := FDatabase.DatabaseName;
+    FStoredProc.DatabaseName := FDatabase.DatabaseName;
+  end;
+
+  FeSQL := TStringList.Create;
+end;
+
+destructor TCustomPDB.Destroy;
+begin
+  inherited;
+
+  if FQuery.Active then
+    FQuery.Close;
+  FQuery.Free;
+  if FUseQuery.Active then
+    FUseQuery.Close;
+  FUseQuery.Free;
+  if FCdsQuery.Active then
+    FCdsQuery.Close;
+  FCdsQuery.Free;
+  if FStoredProc.Active then
+    FStoredProc.Close;
+  FStoredProc.Free;
+
+  FeSQL.Free;
+end;
+
+procedure TCustomPDB.SetDatabase(Value: TDatabase);
+begin
+  if (FDatabase <> Value) then
+  begin
+    FDatabase := Value;
+
+    FQuery.Close;
+    FQuery.DatabaseName := FDatabase.DatabaseName;
+    FUseQuery.Close;
+    FUseQuery.DatabaseName := FDatabase.DatabaseName;
+    FCdsQuery.Close;
+    FCdsQuery.DatabaseName := FDatabase.DatabaseName;
+    FStoredProc.Close;
+    FStoredProc.DatabaseName := FDatabase.DatabaseName;
+  end;
+end;
+
+procedure TCustomPDB.StartTransaction;
+begin
+  if Assigned(FDatabase) then
+  begin
+    if FDatabase.InTransaction then
+    begin
+      FDatabase.Rollback;
+      Debug.Write(1, 0, 'StartTransaction, Transaction Exist Rollback');
+    end;
+    FDatabase.StartTransaction;
+    Debug.Write(1, 0, 'StartTransaction, Transaction Strat');
+  end;
+end;
+
+procedure TCustomPDB.Commit;
+begin
+  if Assigned(FDatabase) then
+  begin
+    FDatabase.Commit;
+    Debug.Write(1, 0, 'Commit, Transaction Commit');
+  end;
+end;
+
+procedure TCustomPDB.Rollback;
+begin
+  if Assigned(FDatabase) then
+  begin
+    FDatabase.Rollback;
+    Debug.Write(1, 0, 'Rollback, Transaction Rollback');
+  end;
+end;
+
+{ TCustomPDB_Ado }
+
+constructor TCustomPDB_Ado.Create;
+begin
+  inherited Create;
+
+  FQuery := TAdoQuery.Create(Application);
+  FUseQuery := TAdoQuery.Create(Application);
+  FCdsQuery := TAdoQuery.Create(Application);
+  FExecQry := TAdoQuery.Create(Application);
+  FStoredProc := TADOStoredProc.Create(Application);
+{}
+  FeSQL := TStringList.Create;
+end;
+
+constructor TCustomPDB_Ado.Create(ADatabase: TADOConnection);
+begin
+  inherited Create;
+
+  FDatabase := ADatabase;
+
+  FQuery := TAdoQuery.Create(Application);
+  FUseQuery := TAdoQuery.Create(Application);
+  FCdsQuery := TAdoQuery.Create(Application);
+  FExecQry := TAdoQuery.Create(Application);
+  FStoredProc := TADOStoredProc.Create(Application);
+  if Assigned(FDatabase) then
+  begin
+    FQuery.Connection := FDatabase;
+    FUseQuery.Connection := FDatabase;
+    FCdsQuery.Connection := FDatabase;
+    FExecQry.Connection := FDatabase;
+    FStoredProc.Connection := FDatabase;
+  end;
+
+  FeSQL := TStringList.Create;
+end;
+
+destructor TCustomPDB_Ado.Destroy;
+begin
+
+  if Assigned( FQuery ) then
+  begin
+    if FQuery.Active then
+      FQuery.Close;
+//    FreeAndNil( FQuery );
+  end;
+  if Assigned( FUseQuery ) then
+  begin
+    if FUseQuery.Active then
+      FUseQuery.Close;
+//    FreeAndNil( FUseQuery );
+  end;
+  if Assigned( FCdsQuery ) then
+  begin
+    if FCdsQuery.Active then
+      FCdsQuery.Close;
+//    FreeAndNil( FCdsQuery );
+  end;
+  if Assigned( FExecQry ) then
+  begin
+    if FExecQry.Active then
+      FExecQry.Close;
+//    FreeAndNil( FExecQry );
+  end;
+  if Assigned( FStoredProc ) then
+  begin
+    if FStoredProc.Active then
+      FStoredProc.Close;
+//    FreeAndNil( FStoredProc );
+  end;
+
+  FreeAndNil( FeSQL );
+  inherited;
+end;
+
+procedure TCustomPDB_Ado.Clear_Index(SCDataSet: TClientDataSet);
+begin
+  cdsClearIndex(SCDataSet);
+end;
+
+procedure TCustomPDB_Ado.ADOQueryToCDS(Query: TADOQuery; CDS: TClientDataSet);
+begin
+  Clear_Index(CDS);
+
+  if CDS.Active then CDS.Close;
+
+  with TProvider.Create(nil) do
+  begin
+    try
+      Debug.Write(1,1,'ADOQueryToCDS 1');
+      DataSet := Query;
+      Debug.Write(1,1,'ADOQueryToCDS 2');
+      CDS.Data := Data;
+      Debug.Write(1,1,'ADOQueryToCDS 3');
+    finally
+      Free;
+    end;
+  end;
+end;
+
+procedure TCustomPDB_Ado.ADOQueryToSumCDS(Query: TADOQuery; CDS: TClientDataSet; DisplayFields, GroupFields, SumFields, Expressions: String; WithAvg: Boolean = False;
+  SumDisplay: String = ''; AvgDisplay: String = ''; CallBack: TNotifyEvent = nil);
+var
+  Param: TSummarizeParam;
+begin
+  cdsCopyFrom(CDS, Query);
+  Param.GroupFields := GroupFields; //그릅핑 필드
+  Param.SummaryFields := SumFields; //합계처리할 필드
+  Param.Expressions := Expressions; // 계산식 필드
+  Param.DisplayFields := DisplayFields; // 디폴트값 필드
+  Param.ShowSum := True;
+  Param.ShowAverage := WithAvg;
+  Param.SumText := SumDisplay;
+  Param.AvgText := AvgDisplay;
+  Param.CallBack := CallBack;
+
+  cdsSummarize( CDS , Param );
+end;
+
+procedure TCustomPDB_Ado.DBGridCheckBoxClick(Sender: TObject; Column: TColumn);
+var
+  DBGrid: TDBGrid;
+begin
+  DBGrid := Sender as TDBGrid;
+  cdsGroupFilter( TClientDataSet(DBGrid.DataSource.DataSet) , DBGrid.GetCheckedField , DBGrid.Checked );
+
+//  sumcdsGroupFilter( TClientDataSet(DBGrid.DataSource.DataSet) , DBGrid.GetCheckedField , DBGrid.Checked );
+end;
+
+function TCustomPDB_Ado.GetQuery: TADOQuery;
+begin
+  Result := FQuery;
+end;
+
+function TCustomPDB_Ado.GetUseQuery: TADOQuery;
+begin
+  Result := FUseQuery;
+end;
+
+
+procedure TCustomPDB_Ado.SetDatabase(Value: TADOConnection);
+begin
+  if (FDatabase <> Value) then
+  begin
+    FDatabase := Value;
+
+    if not Assigned(FQuery) then
+      FQuery := TAdoQuery.Create(Application);
+    if not Assigned(FUseQuery) then
+      FUseQuery := TAdoQuery.Create(Application);
+    if not Assigned(FCdsQuery) then
+      FCdsQuery := TAdoQuery.Create(Application);
+    if not Assigned(FExecQry) then
+      FExecQry := TAdoQuery.Create(Application);
+    if not Assigned(FStoredProc) then
+      FStoredProc := TADOStoredProc.Create(Application);
+    FQuery.Close;
+    FQuery.Connection := FDatabase;
+    FUseQuery.Close;
+    FUseQuery.Connection := FDatabase;
+    FCdsQuery.Close;
+    FCdsQuery.Connection := FDatabase;
+    FExecQry.Close;
+    FExecQry.Connection := FDatabase;
+    FStoredProc.Close;
+    FStoredProc.Connection := FDatabase;
+  end;
+end;
+
+procedure TCustomPDB_Ado.StartTransaction;
+begin
+  if Assigned(FDatabase) then
+  begin
+    if FDatabase.InTransaction then
+    begin
+      FDatabase.RollbackTrans;
+      Debug.Write(1, 0, 'StartTransaction, Transaction Exist Rollback');
+    end;
+    FDatabase.BeginTrans;
+    Debug.Write(1, 0, 'StartTransaction, Transaction Strat');
+  end;
+end;
+
+procedure TCustomPDB_Ado.Commit;
+begin
+  if Assigned(FDatabase) then
+  begin
+    FDatabase.CommitTrans;
+    Debug.Write(1, 0, 'Commit, Transaction Commit');
+  end;
+end;
+
+procedure TCustomPDB_Ado.Rollback;
+begin
+  if Assigned(FDatabase) then
+  begin
+    FDatabase.RollbackTrans;
+    Debug.Write(1, 0, 'Rollback, Transaction Rollback');
+  end;
+end;
+
+function TCustomPDB_Ado.OpenQuery(Query: TADOQuery; SQLStr: String): Integer;
+var dtTime : TDateTime;
+begin
+// 결과값 0: 성공; -1: 실패
+  Result := -1;
+  dtTime := Now;
+  with Query, Query.SQL do
+  begin
+    Close;
+    Clear;
+    Text := SQLStr;
+    DebugLib.Debug.Write(1, 999, Text);
+    Open;
+    Result := 0;
+  end;
+  DebugLib.Debug.Write(1, 999, 'Duration='+FormatDateTime('HH:MM:SS:ZZZ', now-dtTime));
+end;
+
+function TCustomPDB_Ado.OpenCDS(CDS: TClientDataSet; SQLStr: String; Flag: Boolean=True): Integer;
+var dtTime : TDateTime;
+begin
+// 결과값 0: 성공; -1: 실패
+  Result := -1;
+  dtTime := Now;
+  with FCdsQuery, FCdsQuery.SQL do
+  begin
+    Close;
+    ParamCheck := Flag;
+    Clear;
+    Text := SQLStr;
+    DebugLib.Debug.Write(1, 999, Text);
+    Open;
+    AdoQueryToCDS(FCdsQuery, CDS);
+    Result := 0;
+    Close;
+  end;
+  DebugLib.Debug.Write(1, 999, 'Duration='+FormatDateTime('HH:MM:SS:ZZZ', now-dtTime));
+end;
+
+function TCustomPDB_Ado.OpenSumCDS(DBGrid: TDBGrid; CDS: TClientDataSet; SQLStr: String; DisplayFields, GroupFields, SumFields, Expressions: String; CallBack: TNotifyEvent = nil;
+  WithAvg: Boolean = False; SumDisplay: String = '';  AvgDisplay: String = ''; Flag: Boolean = TRUE): Integer;
+var dtTime : TDateTime;
+begin
+// 결과값 0: 성공; -1: 실패
+  Result := -1;
+  dtTime := Now;
+  with FCdsQuery, FCdsQuery.SQL do
+  begin
+    Close;
+    ParamCheck := Flag;
+    Clear;
+    Text := SQLStr;
+    DebugLib.Debug.Write(2, 9871, SQLStr);
+    Open;
+    TDataSource(DBGrid.DataSource).Enabled := False;
+    ADOQueryToSumCDS(FCdsQuery, TClientDataSet(DBGrid.DataSource.DataSet), DisplayFields, GroupFields, SumFields, Expressions, WithAvg, SumDisplay, AvgDisplay, CallBack);
+
+
+    TDataSource(DBGrid.DataSource).Enabled := True;
+    if not Assigned(CDS) then
+    begin
+      DBGrid.CheckFields := GroupFields;
+      DBGrid.ShowCheckBox := True;
+      DBGrid.CheckAll;
+      DBGrid.OnCheckBoxClick := DBGridCheckBoxClick;
+    end
+    else DBGrid.ShowCheckBox := False;
+    Result := 0;
+    Close;
+  end;
+  DebugLib.Debug.Write(1, 999, 'Duration='+FormatDateTime('HH:MM:SS:ZZZ', now-dtTime));
+end;
+
+function TCustomPDB_Ado.OpenDS(DS: TDataSource; SQLStr: String; Flag: Boolean = TRUE): Integer;
+begin
+  DS.Enabled := False;
+  Result := OpenCDS(TClientDataSet(DS.DataSet), SQLStr, Flag);
+  DS.Enabled := True;
+end;
+
+function TCustomPDB_Ado.ExecQuery(SQLStr: String): Integer;
+begin
+// 결과값 -1: 실패; 실행된 Row Count
+  Result := -1;
+
+  with FExecQry, FExecQry.SQL do
+  begin
+    Close;
+    Clear;
+    Text := SQLStr;
+    DebugLib.Debug.Write(9, 999, Text);
+    ExecSQL;
+    Result := RowsAffected;
+  end;
+end;
+
+function TCustomPDB_Ado.GetMaxValue(SQLStr: String): Integer;
+begin
+  if OpenQuery(FQuery, SQLStr) = -1 then
+    Result := 0
+  else if FQuery.IsEmpty then
+    Result := 0
+  else if FQuery.Fields[0].AsString = '' then
+    Result := 0
+  else
+    Result := FQuery.Fields[0].AsInteger;
+  FQuery.Close;
+end;
+
+function TCustomPDB_Ado.RecordExists(SQLStr: String): Boolean;
+begin
+  if OpenQuery(FQuery, SQLStr) = -1 then
+    Result := False
+  else
+    Result := not FQuery.IsEmpty;
+  FQuery.Close;
+end;
+
+function TCustomPDB_Ado.RecordCount(SQLStr: String): Integer;
+begin
+  if OpenQuery(FQuery, SQLStr) = -1 then
+    Result := 0
+  else if FQuery.IsEmpty then
+    Result := 0
+  else if FQuery.Fields[0].AsString = '' then
+    Result := 0
+  else
+    Result := FQuery.Fields[0].AsInteger;
+  FQuery.Close;
+end;
+
+function TCustomPDB_Ado.GetValue(SQLStr: String): String;
+begin
+  if OpenQuery(FQuery, SQLStr) = -1 then
+    Result := ''
+  else if FQuery.IsEmpty then
+    Result := ''
+  else if FQuery.Fields[0].AsString = '' then
+    Result := ''
+  else
+    Result := FQuery.Fields[0].AsString;
+  FQuery.Close;
+end;
+
+
+{ TCustomPDB_Uni }
+
+constructor TCustomPDB_Uni.Create;
+begin
+  inherited Create;
+
+  if not Assigned(FQuery) then
+  begin
+    FQuery := TUniQuery.Create(Application);
+    FUseQuery := TUniQuery.Create(Application);
+    FCdsQuery := TUniQuery.Create(Application);
+    FExecQry := TUniQuery.Create(Application);
+    FStoredProc := TUniStoredProc.Create(Application);
+  end;
+  FeSQL := TStringList.Create;
+end;
+
+constructor TCustomPDB_Uni.Create(ADatabase: TUniConnection);
+begin
+  inherited Create;
+
+  FDatabase := TUniConnection.Create(Application);
+
+  FDatabase := ADatabase;
+
+  FQuery := TUniQuery.Create(Application);
+  FUseQuery := TUniQuery.Create(Application);
+  FCdsQuery := TUniQuery.Create(Application);
+  FExecQry := TUniQuery.Create(Application);
+  FStoredProc := TUniStoredProc.Create(Application);
+  if Assigned(FDatabase) then
+  begin
+    FQuery.Connection := FDatabase;
+    FUseQuery.Connection := FDatabase;
+    FCdsQuery.Connection := FDatabase;
+    FExecQry.Connection := FDatabase;
+    FStoredProc.Connection := FDatabase;
+  end;
+
+  FeSQL := TStringList.Create;
+end;
+
+destructor TCustomPDB_Uni.Destroy;
+begin
+  inherited;
+
+  if Assigned( FQuery ) then
+  begin
+    if FQuery.Active then
+      FQuery.Close;
+//    FreeAndNil( FQuery );
+  end;
+  if Assigned( FUseQuery ) then
+  begin
+    if FUseQuery.Active then
+      FUseQuery.Close;
+//    FreeAndNil( FUseQuery );
+  end;
+  if Assigned( FCdsQuery ) then
+  begin
+    if FCdsQuery.Active then
+      FCdsQuery.Close;
+//    FreeAndNil( FCdsQuery );
+  end;
+  if Assigned( FExecQry ) then
+  begin
+    if FExecQry.Active then
+      FExecQry.Close;
+//    FreeAndNil( FExecQuery );
+  end;
+  if Assigned( FStoredProc ) then
+  begin
+    if FStoredProc.Active then
+      FStoredProc.Close;
+//    FreeAndNil( FStoredProc );
+  end;
+
+  FreeAndNil( FeSQL );
+end;
+
+function TCustomPDB_Uni.GetQuery: TUniQuery;
+begin
+  Result := FQuery;
+end;
+
+function TCustomPDB_Uni.GetUseQuery: TUniQuery;
+begin
+  Result := FUseQuery;
+end;
+
+procedure TCustomPDB_Uni.Clear_Index(SCDataSet: TClientDataSet);
+begin
+  cdsClearIndex(SCDataSet);
+end;
+
+procedure TCustomPDB_Uni.UniQueryToCDS(Query: TUniQuery; CDS: TClientDataSet);
+begin
+  Clear_Index(CDS);
+
+  if CDS.Active then CDS.Close;
+
+  with TProvider.Create(nil) do
+  begin
+    try
+      Debug.Write(1,1,'UniQueryToCDS 1');
+      DataSet := Query;
+      Debug.Write(1,1,'UniQueryToCDS 2');
+      CDS.Data := Data;
+      Debug.Write(1,1,'UniQueryToCDS 3');
+    finally
+      Free;
+    end;
+  end;
+end;
+
+procedure TCustomPDB_Uni.UniQueryToSumCDS(Query: TUniQuery; CDS: TClientDataSet; DisplayFields, GroupFields, SumFields, Expressions: String; WithAvg: Boolean = False;
+  SumDisplay: String = ''; AvgDisplay: String = ''; CallBack: TNotifyEvent = nil);
+var
+  Param: TSummarizeParam;
+begin
+  cdsCopyFrom(CDS, Query);
+  Param.GroupFields := GroupFields; //그릅핑 필드
+  Param.SummaryFields := SumFields; //합계처리할 필드
+  Param.Expressions := Expressions; // 계산식 필드
+  Param.DisplayFields := DisplayFields; // 디폴트값 필드
+  Param.ShowSum := True;
+  Param.ShowAverage := WithAvg;
+  Param.SumText := SumDisplay;
+  Param.AvgText := AvgDisplay;
+  Param.CallBack := CallBack;
+
+  cdsSummarize( CDS , Param );
+end;
+
+procedure TCustomPDB_Uni.DBGridCheckBoxClick(Sender: TObject; Column: TColumn);
+var
+  DBGrid: TDBGrid;
+begin
+  DBGrid := Sender as TDBGrid;
+  cdsGroupFilter( TClientDataSet(DBGrid.DataSource.DataSet) , DBGrid.GetCheckedField , DBGrid.Checked );
+
+//  sumcdsGroupFilter( TClientDataSet(DBGrid.DataSource.DataSet) , DBGrid.GetCheckedField , DBGrid.Checked );
+end;
+
+procedure TCustomPDB_Uni.SetDatabase(Value: TUniConnection);
+begin
+  if (FDatabase <> Value) then
+  begin
+    FDatabase := Value;
+
+    if not Assigned(FQuery) then
+      FQuery := TUniQuery.Create(Application);
+    if not Assigned(FUseQuery) then
+      FUseQuery := TUniQuery.Create(Application);
+    if not Assigned(FCdsQuery) then
+      FCdsQuery := TUniQuery.Create(Application);
+    if not Assigned(FStoredProc) then
+      FStoredProc := TUniStoredProc.Create(Application);
+    FQuery.Close;
+    FQuery.Connection := FDatabase;
+    FUseQuery.Close;
+    FUseQuery.Connection := FDatabase;
+    FCdsQuery.Close;
+    FCdsQuery.Connection := FDatabase;
+    FExecQry.Close;
+    FExecQry.Connection := FDatabase;
+    FStoredProc.Close;
+    FStoredProc.Connection := FDatabase;
+  end;
+end;
+
+procedure TCustomPDB_Uni.StartTransaction;
+begin
+  if Assigned(FDatabase) then
+  begin
+    if FDatabase.InTransaction then
+    begin
+      FDatabase.Rollback;
+      Debug.Write(1, 0, 'StartTransaction, Transaction Exist Rollback');
+    end;
+    FDatabase.StartTransaction;
+    Debug.Write(1, 0, 'StartTransaction, Transaction Strat');
+  end;
+end;
+
+procedure TCustomPDB_Uni.Commit;
+begin
+  if Assigned(FDatabase) then
+  begin
+    FDatabase.Commit;
+    Debug.Write(1, 0, 'Commit, Transaction Commit');
+  end;
+end;
+
+procedure TCustomPDB_Uni.Rollback;
+begin
+  if Assigned(FDatabase) then
+  begin
+    FDatabase.Rollback;
+    Debug.Write(1, 0, 'Rollback, Transaction Rollback');
+  end;
+end;
+
+function TCustomPDB_Uni.OpenQuery(Query: TUniQuery; SQLStr: String): Integer;
+var dtTime : TDateTime;
+begin
+// 결과값 0: 성공; -1: 실패
+  Result := -1;
+  dtTime := Now;
+  with Query, Query.SQL do
+  begin
+    Close;
+    Clear;
+    Text := SQLStr;
+    DebugLib.Debug.Write(1, 999, Text);
+    Open;
+    Result := 0;
+  end;
+  DebugLib.Debug.Write(1, 999, 'Duration='+FormatDateTime('HH:MM:SS:ZZZ', now-dtTime));
+end;
+
+function TCustomPDB_Uni.OpenCDS(CDS: TClientDataSet; SQLStr: String; Flag: Boolean=True): Integer;
+var dtTime : TDateTime;
+begin
+// 결과값 0: 성공; -1: 실패
+  Result := -1;
+  dtTime := Now;
+  with FCdsQuery, FCdsQuery.SQL do
+  begin
+    Close;
+    ParamCheck := Flag;
+    Clear;
+    Text := SQLStr;
+    DebugLib.Debug.Write(1, 999, Text);
+    Open;
+    UniQueryToCDS(FCdsQuery, CDS);
+    Result := 0;
+    Close;
+  end;
+  DebugLib.Debug.Write(1, 999, 'Duration='+FormatDateTime('HH:MM:SS:ZZZ', now-dtTime));
+end;
+
+function TCustomPDB_Uni.OpenSumCDS(DBGrid: TDBGrid; CDS: TClientDataSet; SQLStr: String; DisplayFields, GroupFields, SumFields, Expressions: String; CallBack: TNotifyEvent = nil;
+  WithAvg: Boolean = False; SumDisplay: String = '';  AvgDisplay: String = ''; Flag: Boolean = TRUE): Integer;
+var dtTime : TDateTime;
+begin
+// 결과값 0: 성공; -1: 실패
+  Result := -1;
+  dtTime := Now;
+  with FCdsQuery, FCdsQuery.SQL do
+  begin
+    Close;
+    ParamCheck := Flag;
+    Clear;
+    Text := SQLStr;
+    DebugLib.Debug.Write(2, 9871, SQLStr);
+    Open;
+    TDataSource(DBGrid.DataSource).Enabled := False;
+    UniQueryToSumCDS(FCdsQuery, TClientDataSet(DBGrid.DataSource.DataSet), DisplayFields, GroupFields, SumFields, Expressions, WithAvg, SumDisplay, AvgDisplay, CallBack);
+
+
+    TDataSource(DBGrid.DataSource).Enabled := True;
+    if not Assigned(CDS) then
+    begin
+      DBGrid.CheckFields := GroupFields;
+      DBGrid.ShowCheckBox := True;
+      DBGrid.CheckAll;
+      DBGrid.OnCheckBoxClick := DBGridCheckBoxClick;
+    end
+    else DBGrid.ShowCheckBox := False;
+    Result := 0;
+    Close;
+  end;
+  DebugLib.Debug.Write(1, 999, 'Duration='+FormatDateTime('HH:MM:SS:ZZZ', now-dtTime));
+end;
+
+function TCustomPDB_Uni.OpenDS(DS: TDataSource; SQLStr: String; Flag: Boolean = TRUE): Integer;
+begin
+  DS.Enabled := False;
+  Result := OpenCDS(TClientDataSet(DS.DataSet), SQLStr, Flag);
+  DS.Enabled := True;
+end;
+
+function TCustomPDB_Uni.ExecQuery(SQLStr: String): Integer;
+begin
+// 결과값 -1: 실패; 실행된 Row Count
+  Result := -1;
+
+  with FExecQry, FExecQry.SQL do
+  begin
+    Close;
+    Clear;
+    Text := SQLStr;
+    DebugLib.Debug.Write(9, 999, Text);
+    ExecSQL;
+    Result := RowsAffected;
+  end;
+end;
+
+function TCustomPDB_Uni.GetMaxValue(SQLStr: String): Integer;
+begin
+  if OpenQuery(FQuery, SQLStr) = -1 then
+    Result := 0
+  else if FQuery.IsEmpty then
+    Result := 0
+  else if FQuery.Fields[0].AsString = '' then
+    Result := 0
+  else
+    Result := FQuery.Fields[0].AsInteger;
+  FQuery.Close;
+end;
+
+function TCustomPDB_Uni.RecordExists(SQLStr: String): Boolean;
+begin
+  if OpenQuery(FQuery, SQLStr) = -1 then
+    Result := False
+  else
+    Result := not FQuery.IsEmpty;
+  FQuery.Close;
+end;
+
+function TCustomPDB_Uni.RecordCount(SQLStr: String): Integer;
+begin
+  if OpenQuery(FQuery, SQLStr) = -1 then
+    Result := 0
+  else if FQuery.IsEmpty then
+    Result := 0
+  else if FQuery.Fields[0].AsString = '' then
+    Result := 0
+  else
+    Result := FQuery.Fields[0].AsInteger;
+  FQuery.Close;
+end;
+
+function TCustomPDB_Uni.GetValue(SQLStr: String): String;
+begin
+  if OpenQuery(FQuery, SQLStr) = -1 then
+    Result := ''
+  else if FQuery.IsEmpty then
+    Result := ''
+  else if FQuery.Fields[0].AsString = '' then
+    Result := ''
+  else
+    Result := FQuery.Fields[0].AsString;
+  FQuery.Close;
+end;
+
+
+{ TCustomProject }
+
+function SlashSep(const Path, S: String): String;
+begin
+  if AnsiLastChar(Path)^ <> '\' then
+    Result := Path + '\' + S
+  else
+    Result := Path + S;
+end;
+
+constructor TCustomProject.Create;
+begin
+  inherited;
+
+  FUser := TUser.CreateInstance;
+  FRootPath  := ExtractFilePath(Application.ExeName);
+  FDBPath    := SlashSep(FRootPath, 'DB\');
+  FImagePath := SlashSep(FRootPath, 'IMAGE\');
+
+  FRealFileName := ChangeFileExt(ExtractFileName(Application.ExeName), '');
+  FIniFileName := SlashSep(FRootPath, ChangeFileExt(FRealFileName, '.ini'));
+end;
+
+destructor TCustomProject.Destroy;
+begin
+  inherited;
+end;
+
+function TCustomProject.GetConfig(Section, Ident: String; DefaultValue: String): String;
+var
+  strResult: array[0..255] of Char;
+  iResultLen: Integer;
+begin
+  strResult := '';
+  iResultLen := 255;
+
+  Result := DefaultValue;
+  if (GetPrivateProfileString(PChar(Section),
+                              PChar(Ident),
+                              PChar(DefaultValue),
+                              strResult,
+                              iResultLen,
+                              PChar(FIniFileName)) > 0) then
+    Result := strResult;
+end;
+
+function TCustomProject.GetConfig(Section, Ident: String; DefaultValue: Integer): Integer;
+var
+  strResult: array[0..255] of Char;
+  iResultLen: Integer;
+begin
+  strResult := '';
+  iResultLen := 255;
+
+  Result := DefaultValue;
+  if (GetPrivateProfileString(PChar(Section),
+                              PChar(Ident),
+                              PChar(IntToStr(DefaultValue)),
+                              strResult,
+                              iResultLen,
+                              PChar(FIniFileName)) > 0) then
+    Result := StrToIntDef(strResult, DefaultValue);
+end;
+
+function TCustomProject.SetConfig(Section, Ident: String; Value: String): Boolean;
+begin
+  Result := WritePrivateProfileString(PChar(Section),
+                                      PChar(Ident),
+                                      PChar(Value),
+                                      PChar(FIniFileName));
+end;
+
+function TCustomProject.SetConfig(Section, Ident: String; Value: Integer): Boolean;
+begin
+  Result := WritePrivateProfileString(PChar(Section),
+                                      PChar(Ident),
+                                      PChar(IntToStr(Value)),
+                                      PChar(FIniFileName));
+end;
+
+function TCustomProject.GetUserID: String;
+begin
+  Result := FUser.ID;
+end;
+
+function TCustomProject.GetUserName: String;
+begin
+  Result := FUser.Name;
+end;
+
+function TCustomProject.GetUserGrade: String;
+begin
+  Result := FUser.Grade;
+end;
+
+procedure TCustomProject.SetUserID(Value: String);
+begin
+  FUser.ID := Value;
+end;
+
+procedure TCustomProject.SetUserName(Value: String);
+begin
+  FUser.Name := Value;
+end;
+
+procedure TCustomProject.SetUserGrade(Value: String);
+begin
+  FUser.Grade := Value;
+end;
+
+procedure TCustomProject.SetMsgCaption(Value: String);
+begin
+  FMSG_CAPTION := Value;
+end;
+
+function TCustomProject.MsgBox(const Text, Caption: PChar;  Flags: Integer): Integer;
+begin
+  Result := Application.MessageBox(Text, Caption, Flags);
+end;
+
+function TCustomProject.MsgBox(const Text: PChar; Flags: Integer): Integer;
+begin
+  Result := Application.MessageBox(Text, PChar(FMSG_CAPTION), Flags);
+end;
+
+procedure TCustomProject.MsgBox(const Msg, Caption: String; DlgType: TMsgDlgType);
+var
+  Cap: String;
+  Flags: Integer;
+begin
+  case DlgType of
+    mtWarning:      Flags := MB_Ok + MB_IconWarning;
+    mtError:        Flags := MB_Ok + MB_IconError;
+    mtInformation:  Flags := MB_Ok + MB_IconInformation;
+    mtConfirmation: Flags := MB_YesNo + mb_IconQuestion;
+    mtCustom:       Flags := MB_Ok;
+    else Flags := MB_Ok;
+  end;
+
+  if Caption = '' then
+    Cap := FMSG_CAPTION
+  else
+    Cap := Caption;
+
+  //Application.MessageBox(PChar(Msg), PChar(Cap), Flags);
+  ShowMessage(Msg);
+end;
+
+function TCustomProject.MsgDlg(const Msg, Caption: String; DlgType: TMsgDlgType): Integer;
+var
+  Cap: String;
+  Flags: Integer;
+begin
+  case DlgType of
+    mtWarning:      Flags := MB_Ok + MB_IconWarning;
+    mtError:        Flags := MB_Ok + MB_IconError;
+    mtInformation:  Flags := MB_Ok + MB_IconInformation;
+    mtConfirmation: Flags := MB_YesNo + mb_IconQuestion;
+    mtCustom:       Flags := MB_Ok;
+  end;
+
+  if Caption = '' then
+    Cap := FMSG_CAPTION
+  else
+    Cap := Caption;
+
+  Result := Application.MessageBox(PChar(Msg), PChar(Cap), Flags);
+end;
+
+function TCustomProject.MsgDisplay(Msg: String; Flag: Integer): Integer;
+Const
+  MsgStr_Arr: array[1..4] of String = ('Error', 'Question', 'Warning', 'Information');
+begin
+  while Pos('|', Msg) > 0 do Msg[Pos('|', Msg)] := #13;
+
+  Result := Application.MessageBox(PChar(Msg),PChar(MsgStr_Arr[(Flag div 10)]),StrToInt('$'+IntToStr(Flag)));
+end;
+
+procedure TCustomProject.MsgProcess(const Msg: String);
+begin
+  MsgDlg(Msg, '', mtInformation);
+end;
+
+function TCustomProject.MsgConfirm(const Msg: String): Boolean;
+begin
+  Result := MsgDlg(Msg, '', mtConfirmation) = IDYES;
+end;
+
+procedure TCustomProject.MsgError(const Msg: String);
+begin
+  MsgDlg(Msg, '', mtError);
+end;
+
+procedure TCustomProject.MsgWarning(const Msg: String);
+begin
+  MsgDlg(Msg, '', mtWarning);
+end;
+
+procedure TCustomProject.MsgSaveError;
+begin
+  MsgDlg('저장하는 과정에 오류가 생겼습니다.', '', mtError);
+end;
+
+procedure TCustomProject.MsgDeleteError;
+begin
+  MsgDlg('삭제하는 과정에 오류가 생겼습니다.', '', mtError);
+end;
+
+function TCustomProject.ConfirmSave: Boolean;
+begin
+  Result := MsgDlg('저장하시겠습니까?', '', mtConfirmation) = IDYES;
+end;
+
+function TCustomProject.ConfirmDelete(AValue: Boolean = False): Boolean;
+begin
+  if AValue and (RIGHT<>'5') then
+  begin
+    MsgDlg('시스템관리자만 삭제가 가능합니다.', '', mtWarning);
+    Result := False;
+    exit;
+  end;
+  Result := MsgDlg('삭제하시겠습니까?', '', mtConfirmation) = IDYES;
+end;
+
+function TCustomProject.ConfirmUpdate(AValue: Boolean = False): Boolean;
+begin
+  if AValue and (RIGHT<>'5') then
+  begin
+    MsgDlg('시스템관리자만 수정가능합니다.', '', mtWarning);
+    Result := False;
+    exit;
+  end;
+  Result := MsgDlg('수정하시겠습니까?', '', mtConfirmation) = IDYES;
+end;
+
+function TCustomProject.ConfirmClose(AValue: Boolean = False): Boolean;
+begin
+  if  AValue then
+    Result := MsgDlg('자료가 변경되었습니다.'#13#10'종료하시겠습니까?', '', mtConfirmation) = IDYES
+  else
+    Result := True;
+end;
+
+
+
+procedure TCustomProject.MsgNewData;
+begin
+//  StatusBarMsg('새 자료를 입력합니다.');
+end;
+
+procedure TCustomProject.TitleClick_Sort(SCDataSet : TClientDataSet; SDBGrid: TDBGrid; Column: TColumn; var Asc: Boolean);
+begin
+  Asc := not(Asc);
+  cdsSort(SCDataSet, Column, Asc);
+end;
+
+procedure TCustomProject.TitleClick_Sort(SCDataSet : TClientDataSet; SDBGrid: TDBGrid; Column: TColumn; Field_Sort: String; var Asc: Boolean);
+begin
+  Asc := not(Asc);
+  cdsSort(SCDataSet, Column, Field_Sort, Asc);
+end;
+
+procedure TCustomProject.LogStart(AFileName: String);
+var
+  fp: Integer;
+begin
+  FLogFileName := AFileName;
+
+  fp := FileCreate(FLogFileName);
+//  if fp < 0 then
+//    DebugLevel :=0;
+
+  FileClose(fp);
+end;
+
+procedure TCustomProject.LogStop;
+begin
+//
+end;
+
+function TCustomProject.Log(Msg: String; AFileName: String=''): Boolean;
+var
+  F : TextFile;
+begin
+  Result := False;
+
+  try
+    if AFileName = '' then AssignFile(F, FLogFileName)
+    else  AssignFile(F, AFileName);
+    Append(F);
+    Writeln(F, Msg);
+    CloseFile(F);
+  except
+    ;
+  end;
+
+  result := True;
+end;
+
+procedure TCustomProject.ShowOnTaskBar(AHandle: THandle; Value: Boolean);
+begin
+  case Value of
+    False:
+    begin
+      ShowWindow(AHandle, SW_HIDE);
+//      SetWindowLong(AHandle, GWL_EXSTYLE, GetWindowLong(AHandle, GWL_EXSTYLE) or WS_EX_TOOLWINDOW and not WS_EX_APPWINDOW);
+      SetWindowLong(AHandle, GWL_EXSTYLE, GetWindowLong(AHandle, GWL_EXSTYLE) or WS_EX_TOOLWINDOW);
+      ShowWindow(AHandle, SW_SHOW);
+    end;
+    True:
+    begin
+      ShowWindow(AHandle, SW_HIDE);
+//      SetWindowLong(AHandle, GWL_EXSTYLE, GetWindowLong(AHandle, GWL_EXSTYLE) or WS_EX_TOOLWINDOW and not WS_EX_APPWINDOW);
+      SetWindowLong(AHandle, GWL_EXSTYLE, GetWindowLong(AHandle, GWL_EXSTYLE) and not WS_EX_TOOLWINDOW);
+      ShowWindow(AHandle, SW_SHOW);
+    end;
+  end;
+end;
+
+end.
