@@ -9,6 +9,8 @@ uses
 
 const
   WM_SOCKET_LOG = WM_APP + 101;
+  SOCKET_SERVER_HOST = '127.0.0.1';
+  SOCKET_SERVER_PORT = 5003;
 
 type
   TFrmMain = class(TForm)
@@ -183,8 +185,7 @@ type
     FAlertPopup: TAlertPopupForm;
     FSendLock: TCriticalSection;
     FSocketServer: TIdTCPServer;
-    FSocketServerHost: string;
-    FSocketServerPort: Integer;
+    FSocketClientCount: Integer;
     FSocketLogLock: TCriticalSection;
     FSocketPendingLogs: TStringList;
     FShuttingDown: Boolean;
@@ -242,6 +243,7 @@ type
     procedure UpdateButtons;
     procedure UpdateCallInfoFields;
     procedure UpdateStatus;
+    function NormalizeSocketLogText(const AText: string): string;
     function GetSocketPeerText(AContext: TIdContext): string;
     procedure ShowAlert(const AMessage: string);
     procedure HideAlert;
@@ -1232,11 +1234,6 @@ end;
 
 procedure TFrmMain.StartSocketServer;
 begin
-  if Trim(FSocketServerHost) = '' then
-    FSocketServerHost := '0.0.0.0';
-  if FSocketServerPort <= 0 then
-    FSocketServerPort := 5003;
-
   CreateSocketServer;
   if FSocketServer.Active then
     Exit;
@@ -1244,13 +1241,14 @@ begin
   FSocketServer.Bindings.Clear;
   with FSocketServer.Bindings.Add do
   begin
-    IP := FSocketServerHost;
-    Port := FSocketServerPort;
+    IP := SOCKET_SERVER_HOST;
+    Port := SOCKET_SERVER_PORT;
   end;
 
   try
+    FSocketClientCount := 0;
     FSocketServer.Active := True;
-    AddLog(Format('TCP socket server listening on %s:%d', [FSocketServerHost, FSocketServerPort]));
+    AddLog(Format('TCP socket server listening on %s:%d', [SOCKET_SERVER_HOST, SOCKET_SERVER_PORT]));
   except
     on E: Exception do
       AddLog('TCP socket server start failed: ' + E.Message);
@@ -1261,6 +1259,7 @@ procedure TFrmMain.StopSocketServer;
 begin
   if Assigned(FSocketServer) and FSocketServer.Active then
     FSocketServer.Active := False;
+  FSocketClientCount := 0;
 end;
 procedure TFrmMain.DoConnect;
 var
@@ -1427,6 +1426,7 @@ begin
   edtTransferNumber.Text := '';
   FClient := nil;
   FSocketServer := nil;
+  FSocketClientCount := 0;
   FLoggedIn := False;
   FConnecting := False;
   FSession := 'None';
@@ -1447,8 +1447,6 @@ begin
   FDisplayAni := '';
   FAlertPopup := nil;
   FSendLock := TCriticalSection.Create;
-  FSocketServerHost := '0.0.0.0';
-  FSocketServerPort := 5003;
   FSocketLogLock := TCriticalSection.Create;
   FSocketPendingLogs := TStringList.Create;
   FShuttingDown := False;
@@ -1552,8 +1550,6 @@ begin
 
     edtDialNumber.Text     := LIni.ReadString('Call', 'DialNumber', edtDialNumber.Text);
     edtTransferNumber.Text := LIni.ReadString('Call', 'TransferNumber', edtTransferNumber.Text);
-    FSocketServerHost := LIni.ReadString('SocketServer', 'Host', FSocketServerHost);
-    FSocketServerPort := LIni.ReadInteger('SocketServer', 'Port', FSocketServerPort);
   finally
     LIni.Free;
   end;
@@ -1889,11 +1885,19 @@ begin
     LIni.WriteBool('Connection'   ,'AutoReconnect' ,chkAutoReconnect.Checked);
     LIni.WriteString('Call'       ,'DialNumber'    ,Trim(edtDialNumber.Text));
     LIni.WriteString('Call'       ,'TransferNumber',Trim(edtTransferNumber.Text));
-    LIni.WriteString('SocketServer', 'Host', Trim(FSocketServerHost));
-    LIni.WriteInteger('SocketServer', 'Port', FSocketServerPort);
   finally
     LIni.Free;
   end;
+end;
+
+function TFrmMain.NormalizeSocketLogText(const AText: string): string;
+begin
+  Result := StringReplace(AText, #13#10, '\n', [rfReplaceAll]);
+  Result := StringReplace(Result, #13, '\n', [rfReplaceAll]);
+  Result := StringReplace(Result, #10, '\n', [rfReplaceAll]);
+  Result := Trim(Result);
+  if Result = '' then
+    Result := '<empty>';
 end;
 
 function TFrmMain.GetSocketPeerText(AContext: TIdContext): string;
@@ -1904,22 +1908,41 @@ begin
 end;
 
 procedure TFrmMain.SocketServerConnect(AContext: TIdContext);
+var
+  LCount: Integer;
 begin
-  PostSocketLog('TCP client connected: ' + GetSocketPeerText(AContext));
+  LCount := InterlockedIncrement(FSocketClientCount);
+  PostSocketLog(Format('TCP client connected (%d): %s', [LCount, GetSocketPeerText(AContext)]));
 end;
 
 procedure TFrmMain.SocketServerDisconnect(AContext: TIdContext);
+var
+  LCount: Integer;
 begin
+  LCount := InterlockedDecrement(FSocketClientCount);
+  if LCount < 0 then
+  begin
+    FSocketClientCount := 0;
+    LCount := 0;
+  end;
   if not FShuttingDown then
-    PostSocketLog('TCP client disconnected: ' + GetSocketPeerText(AContext));
+    PostSocketLog(Format('TCP client disconnected (%d): %s', [LCount, GetSocketPeerText(AContext)]));
 end;
 
 procedure TFrmMain.SocketServerExecute(AContext: TIdContext);
+var
+  LText: string;
 begin
   if Assigned(AContext) and Assigned(AContext.Connection) and Assigned(AContext.Connection.IOHandler) then
   begin
     AContext.Connection.IOHandler.CheckForDisconnect(False, True);
-    Sleep(10);
+    AContext.Connection.IOHandler.CheckForDataOnSource(10);
+    if AContext.Connection.IOHandler.InputBuffer.Size > 0 then
+    begin
+      LText := NormalizeSocketLogText(AContext.Connection.IOHandler.InputBufferAsString);
+      PostSocketLog(Format('TCP client recv [%s]: %s', [GetSocketPeerText(AContext), LText]));
+    end;
+    Sleep(5);
   end;
 end;
 
