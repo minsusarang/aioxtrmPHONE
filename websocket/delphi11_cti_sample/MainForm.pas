@@ -1,10 +1,14 @@
 ﻿unit MainForm;
 interface
 uses
-  Windows,  Classes,   JSON,    SysUtils, IniFiles, System.Types, SyncObjs,
+  Windows,  Messages,  Classes,   JSON,    SysUtils, IniFiles, System.Types, SyncObjs,
   System.UITypes,  System.Net.URLClient,  Vcl.Controls,  Vcl.Dialogs,  Vcl.ExtCtrls,
   Vcl.Forms,  Vcl.Graphics,  Vcl.StdCtrls,  Vcl.Menus,  CallListForm, AlertPopupForm,
-  sgcWebSocket,  sgcWebSocket_Classes,  sgcWebSocket_Client,  DebugLib, CurvyControls, GradientLabel, Shader, AdvGlowButton, AdvGlassButton, AdvSmoothButton;
+  sgcWebSocket,  sgcWebSocket_Classes,  sgcWebSocket_Client,  DebugLib, CurvyControls, GradientLabel, Shader, AdvGlowButton, AdvGlassButton, AdvSmoothButton,
+  IdContext, IdTCPServer;
+
+const
+  WM_SOCKET_LOG = WM_APP + 101;
 
 type
   TFrmMain = class(TForm)
@@ -178,10 +182,22 @@ type
     FDisplayAni: string;
     FAlertPopup: TAlertPopupForm;
     FSendLock: TCriticalSection;
+    FSocketServer: TIdTCPServer;
+    FSocketServerHost: string;
+    FSocketServerPort: Integer;
+    FSocketLogLock: TCriticalSection;
+    FSocketPendingLogs: TStringList;
+    FShuttingDown: Boolean;
+    procedure WMSocketLog(var Msg: TMessage); message WM_SOCKET_LOG;
     procedure AddLog(const AText: string);
+    procedure PostSocketLog(const AText: string);
+    procedure FlushSocketLogs;
     procedure ApplyWebSocketConfiguration(const AUrl: string);
     function NormalizeWebSocketUrl(const AUrl: string): string;
     procedure CreateWebSocketClient;
+    procedure CreateSocketServer;
+    procedure StartSocketServer;
+    procedure StopSocketServer;
     procedure DoConnect;
     procedure DoDisconnect;
     function BuildLoginPayload: string;
@@ -226,8 +242,12 @@ type
     procedure UpdateButtons;
     procedure UpdateCallInfoFields;
     procedure UpdateStatus;
+    function GetSocketPeerText(AContext: TIdContext): string;
     procedure ShowAlert(const AMessage: string);
     procedure HideAlert;
+    procedure SocketServerConnect(AContext: TIdContext);
+    procedure SocketServerDisconnect(AContext: TIdContext);
+    procedure SocketServerExecute(AContext: TIdContext);
     procedure WebSocketClientConnect(Connection: TsgcWSConnection);
     procedure WebSocketClientDisconnect(Connection: TsgcWSConnection; Code: Integer);
     procedure WebSocketClientError(Connection: TsgcWSConnection; const Error: string);
@@ -246,6 +266,52 @@ procedure TFrmMain.AddLog(const AText: string);
 begin
   lbLog.Lines.Add(FormatDateTime('yyyy-mm-dd hh:nn:ss', Now) + '  ' + AText);
   lbLog.SelStart := Length(lbLog.Text);
+  lbLog.Perform(EM_SCROLLCARET, 0, 0);
+end;
+
+procedure TFrmMain.PostSocketLog(const AText: string);
+begin
+  if FShuttingDown then
+    Exit;
+  if not (Assigned(FSocketLogLock) and Assigned(FSocketPendingLogs)) then
+    Exit;
+  FSocketLogLock.Acquire;
+  try
+    FSocketPendingLogs.Add(AText);
+  finally
+    FSocketLogLock.Release;
+  end;
+  if HandleAllocated then
+    PostMessage(Handle, WM_SOCKET_LOG, 0, 0);
+end;
+
+procedure TFrmMain.FlushSocketLogs;
+var
+  LPending: TStringList;
+  I: Integer;
+begin
+  if not (Assigned(FSocketLogLock) and Assigned(FSocketPendingLogs)) then
+    Exit;
+  LPending := TStringList.Create;
+  try
+    FSocketLogLock.Acquire;
+    try
+      LPending.Assign(FSocketPendingLogs);
+      FSocketPendingLogs.Clear;
+    finally
+      FSocketLogLock.Release;
+    end;
+    for I := 0 to LPending.Count - 1 do
+      AddLog(LPending[I]);
+  finally
+    LPending.Free;
+  end;
+end;
+
+procedure TFrmMain.WMSocketLog(var Msg: TMessage);
+begin
+  FlushSocketLogs;
+  Msg.Result := 0;
 end;
 procedure TFrmMain.ShowAlert(const AMessage: string);
 begin
@@ -1153,6 +1219,49 @@ begin
   FClient.OnError := WebSocketClientError;
   FClient.OnMessage := WebSocketClientMessage;
 end;
+
+procedure TFrmMain.CreateSocketServer;
+begin
+  if Assigned(FSocketServer) then
+    Exit;
+  FSocketServer := TIdTCPServer.Create(Self);
+  FSocketServer.OnConnect := SocketServerConnect;
+  FSocketServer.OnDisconnect := SocketServerDisconnect;
+  FSocketServer.OnExecute := SocketServerExecute;
+end;
+
+procedure TFrmMain.StartSocketServer;
+begin
+  if Trim(FSocketServerHost) = '' then
+    FSocketServerHost := '0.0.0.0';
+  if FSocketServerPort <= 0 then
+    FSocketServerPort := 5003;
+
+  CreateSocketServer;
+  if FSocketServer.Active then
+    Exit;
+
+  FSocketServer.Bindings.Clear;
+  with FSocketServer.Bindings.Add do
+  begin
+    IP := FSocketServerHost;
+    Port := FSocketServerPort;
+  end;
+
+  try
+    FSocketServer.Active := True;
+    AddLog(Format('TCP socket server listening on %s:%d', [FSocketServerHost, FSocketServerPort]));
+  except
+    on E: Exception do
+      AddLog('TCP socket server start failed: ' + E.Message);
+  end;
+end;
+
+procedure TFrmMain.StopSocketServer;
+begin
+  if Assigned(FSocketServer) and FSocketServer.Active then
+    FSocketServer.Active := False;
+end;
 procedure TFrmMain.DoConnect;
 var
   LCandidates: TStringList;
@@ -1302,7 +1411,7 @@ begin
 end;
 procedure TFrmMain.Initialize;
 begin
-  Caption := 'CTI WebSocket Sample for Delphi 11.3';
+  Caption := 'AIO SOFTPHONE';
   ApplyTheme;
   cbInitMode.Items.Clear;
   cbInitMode.Items.Add('Inbound');
@@ -1317,6 +1426,7 @@ begin
   edtDialNumber.Text := '';
   edtTransferNumber.Text := '';
   FClient := nil;
+  FSocketServer := nil;
   FLoggedIn := False;
   FConnecting := False;
   FSession := 'None';
@@ -1337,6 +1447,11 @@ begin
   FDisplayAni := '';
   FAlertPopup := nil;
   FSendLock := TCriticalSection.Create;
+  FSocketServerHost := '0.0.0.0';
+  FSocketServerPort := 5003;
+  FSocketLogLock := TCriticalSection.Create;
+  FSocketPendingLogs := TStringList.Create;
+  FShuttingDown := False;
   PingTimer.Interval := 30000;
   PingTimer.Enabled := False;
   StateTimer.Interval := 1000;
@@ -1349,6 +1464,7 @@ begin
   panAlert.Visible := False;
   ResetCallContext;
   LoadSettings;
+  StartSocketServer;
   UpdateButtons;
   UpdateStatus;
   AddLog('Sample initialized');
@@ -1403,11 +1519,17 @@ begin
 end;
 procedure TFrmMain.FormDestroy(Sender: TObject);
 begin
+  FShuttingDown := True;
   PingTimer.Enabled := False;
   StateTimer.Enabled := False;
   ReconnectTimer.Enabled := False;
+  StopSocketServer;
+  FlushSocketLogs;
   SaveSettings;
   FreeAndNil(FAlertPopup);
+  FreeAndNil(FSocketPendingLogs);
+  FreeAndNil(FSocketLogLock);
+  FreeAndNil(FSocketServer);
   FreeAndNil(FSendLock);
   FreeAndNil(FClient);
 end;
@@ -1430,6 +1552,8 @@ begin
 
     edtDialNumber.Text     := LIni.ReadString('Call', 'DialNumber', edtDialNumber.Text);
     edtTransferNumber.Text := LIni.ReadString('Call', 'TransferNumber', edtTransferNumber.Text);
+    FSocketServerHost := LIni.ReadString('SocketServer', 'Host', FSocketServerHost);
+    FSocketServerPort := LIni.ReadInteger('SocketServer', 'Port', FSocketServerPort);
   finally
     LIni.Free;
   end;
@@ -1765,8 +1889,37 @@ begin
     LIni.WriteBool('Connection'   ,'AutoReconnect' ,chkAutoReconnect.Checked);
     LIni.WriteString('Call'       ,'DialNumber'    ,Trim(edtDialNumber.Text));
     LIni.WriteString('Call'       ,'TransferNumber',Trim(edtTransferNumber.Text));
+    LIni.WriteString('SocketServer', 'Host', Trim(FSocketServerHost));
+    LIni.WriteInteger('SocketServer', 'Port', FSocketServerPort);
   finally
     LIni.Free;
+  end;
+end;
+
+function TFrmMain.GetSocketPeerText(AContext: TIdContext): string;
+begin
+  Result := 'unknown';
+  if Assigned(AContext) and Assigned(AContext.Binding) then
+    Result := Format('%s:%d', [AContext.Binding.PeerIP, AContext.Binding.PeerPort]);
+end;
+
+procedure TFrmMain.SocketServerConnect(AContext: TIdContext);
+begin
+  PostSocketLog('TCP client connected: ' + GetSocketPeerText(AContext));
+end;
+
+procedure TFrmMain.SocketServerDisconnect(AContext: TIdContext);
+begin
+  if not FShuttingDown then
+    PostSocketLog('TCP client disconnected: ' + GetSocketPeerText(AContext));
+end;
+
+procedure TFrmMain.SocketServerExecute(AContext: TIdContext);
+begin
+  if Assigned(AContext) and Assigned(AContext.Connection) and Assigned(AContext.Connection.IOHandler) then
+  begin
+    AContext.Connection.IOHandler.CheckForDisconnect(False, True);
+    Sleep(10);
   end;
 end;
 
